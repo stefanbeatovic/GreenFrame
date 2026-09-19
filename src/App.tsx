@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-type Task = { id: number; title: string; category: string; time?: string; priority?: 'high'; completed: boolean }
+type Task = { id: number; title: string; category: string; time?: string; dueDate?: string; priority?: 'high'; completed: boolean }
+function getDateKey(date: Date) { return date.toISOString().slice(0, 10) }
+function getTaskDate(task: Task, fallback: string) { return task.dueDate ?? fallback }
 const initialTasks: Task[] = [
   { id: 1, title: 'Finish data literacy assignment', category: 'Studies', time: '10:00', priority: 'high', completed: false },
   { id: 2, title: 'Pick up groceries', category: 'Shopping', time: '17:00', completed: false },
@@ -12,25 +14,44 @@ const categories = [{ name: 'Home', count: 4, tone: 'mint' }, { name: 'Studies',
 function formatDate(date: Date) { return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(date) }
 function getGreeting(hour: number) { return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening' }
 
+function CalendarView({ tasks, currentDate, onToggle }: { tasks: Task[]; currentDate: Date; onToggle: (id: number) => void }) {
+  const [monthDate, setMonthDate] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1))
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+  const firstWeekday = (monthStart.getDay() + 6) % 7
+  const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate()
+  const cells = Array.from({ length: Math.ceil((firstWeekday + daysInMonth) / 7) * 7 }, (_, index) => {
+    const day = index - firstWeekday + 1
+    return day > 0 && day <= daysInMonth ? new Date(monthDate.getFullYear(), monthDate.getMonth(), day) : null
+  })
+  const monthName = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(monthDate)
+
+  return <section className="calendar-section"><div className="calendar-heading"><div><p className="eyebrow">Planning</p><h2>{monthName}</h2></div><div className="calendar-actions"><button className="quiet-button" onClick={() => setMonthDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1))}>Today</button><button className="calendar-arrow" aria-label="Previous month" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button><button className="calendar-arrow" aria-label="Next month" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button></div></div><div className="calendar-grid calendar-weekdays">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid calendar-days">{cells.map((date, index) => { const dateKey = date ? getDateKey(date) : `empty-${index}`; const dayTasks = date ? tasks.filter((task) => getTaskDate(task, getDateKey(currentDate)) === dateKey) : []; const isToday = dateKey === getDateKey(currentDate); return <div className={date ? `calendar-day${isToday ? ' today' : ''}` : 'calendar-day empty'} key={dateKey}><span className="day-number">{date?.getDate()}</span><div className="day-tasks">{dayTasks.map((task) => <button className={`calendar-task ${task.category.toLowerCase()}${task.completed ? ' done' : ''}`} key={task.id} onClick={() => onToggle(task.id)} title={task.title}><span className="calendar-task-dot"></span>{task.title}</button>)}</div></div>})}</div></section>
+}
+
 function App() {
   const [now, setNow] = useState(new Date())
   const [tasks, setTasks] = useState<Task[]>(() => { const saved = localStorage.getItem('frame-tasks'); return saved ? JSON.parse(saved) : initialTasks })
   const [newTask, setNewTask] = useState('')
   const [activeView, setActiveView] = useState('Today')
+  const [showCompleted] = useState(true)
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer) }, [])
   useEffect(() => { localStorage.setItem('frame-tasks', JSON.stringify(tasks)) }, [tasks])
   const completedCount = tasks.filter((task) => task.completed).length
   const remainingCount = tasks.length - completedCount
   const progress = tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0
-  const visibleTasks = useMemo(() => {
+  const filteredTasks = useMemo(() => {
     if (activeView === 'Completed') return tasks.filter((task) => task.completed)
     if (activeView === 'Inbox') return tasks.filter((task) => task.category === 'Inbox')
     if (categories.some((category) => category.name === activeView)) return tasks.filter((task) => task.category === activeView)
     return tasks
   }, [activeView, tasks])
-  function addTask(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const title = newTask.trim(); if (!title) return; setTasks((current) => [...current, { id: Date.now(), title, category: 'Inbox', completed: false }]); setNewTask('') }
+  const visibleTasks = activeView === 'Completed' || showCompleted ? filteredTasks : filteredTasks.filter((task) => !task.completed)
+  const todayKey = getDateKey(now)
+  function addTask(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const title = newTask.trim(); if (!title) return; setTasks((current) => [...current, { id: Date.now(), title, category: 'Inbox', dueDate: todayKey, completed: false }]); setNewTask('') }
   function toggleTask(id: number) { setTasks((current) => current.map((task) => task.id === id ? { ...task, completed: !task.completed } : task)) }
   function removeTask(id: number) { setTasks((current) => current.filter((task) => task.id !== id)) }
+
+  if (activeView === 'Calendar') return <div className="calendar-page"><header className="calendar-page-header"><div className="brand"><span className="brand-mark">F</span><span>frame</span></div><button className="add-button" onClick={() => setActiveView('Today')}>Back to today</button></header><CalendarView tasks={tasks} currentDate={now} onToggle={toggleTask} /></div>
 
   return (
     <div className="app-shell">

@@ -10,7 +10,7 @@ type Task = {
   priority?: "high";
   completed: boolean;
 };
-type List = { name: string; tone: string };
+type List = { name: string; tone: string; color: string; description?: string };
 type Profile = { name: string; email: string };
 function getDateKey(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -52,13 +52,32 @@ const initialTasks: Task[] = [
     completed: false,
   },
 ];
-const categories = [
-  { name: "Home", count: 4, tone: "mint" },
-  { name: "Studies", count: 7, tone: "blue" },
-  { name: "Shopping", count: 3, tone: "amber" },
-  { name: "Projects", count: 5, tone: "coral" },
+const defaultLists: List[] = [
+  {
+    name: "Home",
+    tone: "mint",
+    color: "#9bf3b0",
+    description: "Home, chores, and everyday life.",
+  },
+  {
+    name: "Studies",
+    tone: "blue",
+    color: "#87c7f2",
+    description: "Learning and study work.",
+  },
+  {
+    name: "Shopping",
+    tone: "amber",
+    color: "#f6c879",
+    description: "Things to buy and errands.",
+  },
+  {
+    name: "Projects",
+    tone: "coral",
+    color: "#f19b8b",
+    description: "Longer-term projects and ideas.",
+  },
 ];
-const defaultLists: List[] = categories.map(({ name, tone }) => ({ name, tone }));
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
@@ -289,6 +308,153 @@ function MiniCalendar({
   );
 }
 
+function ListManager({
+  lists,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  lists: List[];
+  onSave: (originalName: string | null, list: List) => void;
+  onDelete: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [draft, setDraft] = useState<List>({
+    name: "",
+    tone: "mint",
+    color: "#9bf3b0",
+    description: "",
+  });
+  const colorOptions = [
+    "#9bf3b0",
+    "#87c7f2",
+    "#f6c879",
+    "#f19b8b",
+    "#d8a7ff",
+    "#f5a6c8",
+    "#8de0d1",
+    "#d6df78",
+    "#ffffff",
+    "#82908a",
+  ];
+  function startNew() {
+    setEditingName(null);
+    setDraft({ name: "", tone: "custom", color: "#9bf3b0", description: "" });
+  }
+  function startEdit(list: List) {
+    setEditingName(list.name);
+    setDraft({ ...list });
+  }
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft.name.trim()) return;
+    onSave(editingName, { ...draft, name: draft.name.trim() });
+    startNew();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="modal list-manager-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="popover-heading">
+          <strong>Manage lists</strong>
+          <button onClick={onClose}>×</button>
+        </div>
+        <div className="list-manager-layout">
+          <div className="managed-list">
+            {lists.map((list) => (
+              <div className="managed-list-row" key={list.name}>
+                <span
+                  className="list-dot"
+                  style={{ background: list.color }}
+                ></span>
+                <span>
+                  <strong>{list.name}</strong>
+                  <small>{list.description || "No description"}</small>
+                </span>
+                <button
+                  aria-label={`Edit ${list.name}`}
+                  onClick={() => startEdit(list)}
+                >
+                  Edit
+                </button>
+                <button
+                  aria-label={`Delete ${list.name}`}
+                  onClick={() => onDelete(list.name)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button className="new-list-button" onClick={startNew}>
+              + New list
+            </button>
+          </div>
+          <form className="list-editor" onSubmit={submit}>
+            <h3>{editingName ? "Edit list" : "New list"}</h3>
+            <label>
+              Name
+              <input
+                className="modal-input"
+                value={draft.name}
+                onChange={(event) =>
+                  setDraft({ ...draft, name: event.target.value })
+                }
+                placeholder="e.g. Family"
+              />
+            </label>
+            <label>
+              Description <span className="optional">optional</span>
+              <textarea
+                className="modal-input"
+                value={draft.description}
+                onChange={(event) =>
+                  setDraft({ ...draft, description: event.target.value })
+                }
+                placeholder="What belongs in this list?"
+                rows={3}
+              />
+            </label>
+            <label>Color</label>
+            <div className="color-picker">
+              {colorOptions.map((color) => (
+                <button
+                  type="button"
+                  className={
+                    draft.color === color
+                      ? "color-swatch selected"
+                      : "color-swatch"
+                  }
+                  style={{ background: color }}
+                  aria-label={`Choose ${color}`}
+                  key={color}
+                  onClick={() => setDraft({ ...draft, color })}
+                ></button>
+              ))}
+              <label className="custom-color">
+                <input
+                  type="color"
+                  value={draft.color}
+                  onChange={(event) =>
+                    setDraft({ ...draft, color: event.target.value })
+                  }
+                />
+                Custom
+              </label>
+            </div>
+            <button className="add-button" type="submit">
+              {editingName ? "Save list" : "Create list"}
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [now, setNow] = useState(new Date());
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
@@ -296,10 +462,35 @@ function App() {
   const [activeView, setActiveView] = useState("Today");
   const [showCompleted] = useState(true);
   const [lists, setLists] = useState<List[]>(() => {
-    try { return JSON.parse(localStorage.getItem("greenframe-lists") ?? "null") ?? defaultLists; } catch { return defaultLists; }
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem("greenframe-lists") ?? "null",
+      ) as Partial<List>[] | null;
+      return (
+        saved?.map(
+          (list) =>
+            ({
+              ...list,
+              color: list.color ?? "#9bf3b0",
+              description: list.description ?? "",
+            }) as List,
+        ) ?? defaultLists
+      );
+    } catch {
+      return defaultLists;
+    }
   });
   const [profile, setProfile] = useState<Profile>(() => {
-    try { return JSON.parse(localStorage.getItem("greenframe-profile") ?? "null") ?? { name: "Stefan", email: "" }; } catch { return { name: "Stefan", email: "" }; }
+    try {
+      return (
+        JSON.parse(localStorage.getItem("greenframe-profile") ?? "null") ?? {
+          name: "Stefan",
+          email: "",
+        }
+      );
+    } catch {
+      return { name: "Stefan", email: "" };
+    }
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -307,7 +498,6 @@ function App() {
   const [listManagerOpen, setListManagerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [newListName, setNewListName] = useState("");
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -315,14 +505,24 @@ function App() {
   useEffect(() => {
     localStorage.setItem("frame-tasks", JSON.stringify(tasks));
   }, [tasks]);
-  useEffect(() => { localStorage.setItem("greenframe-lists", JSON.stringify(lists)); }, [lists]);
-  useEffect(() => { localStorage.setItem("greenframe-profile", JSON.stringify(profile)); }, [profile]);
+  useEffect(() => {
+    localStorage.setItem("greenframe-lists", JSON.stringify(lists));
+  }, [lists]);
+  useEffect(() => {
+    localStorage.setItem("greenframe-profile", JSON.stringify(profile));
+  }, [profile]);
   const completedCount = tasks.filter((task) => task.completed).length;
   const remainingCount = tasks.length - completedCount;
   const progress = tasks.length
     ? Math.round((completedCount / tasks.length) * 100)
     : 0;
+  const todayKey = getDateKey(now);
+  const listByName = (name: string) => lists.find((list) => list.name === name);
   const filteredTasks = useMemo(() => {
+    if (activeView === "Today")
+      return tasks.filter((task) => getTaskDate(task, todayKey) === todayKey);
+    if (activeView === "Upcoming")
+      return tasks.filter((task) => getTaskDate(task, todayKey) > todayKey);
     if (activeView === "Completed")
       return tasks.filter((task) => task.completed);
     if (activeView === "Inbox")
@@ -330,12 +530,11 @@ function App() {
     if (lists.some((list) => list.name === activeView))
       return tasks.filter((task) => task.category === activeView);
     return tasks;
-  }, [activeView, lists, tasks]);
+  }, [activeView, lists, tasks, todayKey]);
   const visibleTasks =
     activeView === "Completed" || showCompleted
       ? filteredTasks
       : filteredTasks.filter((task) => !task.completed);
-  const todayKey = getDateKey(now);
   function addTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = newTask.trim();
@@ -365,24 +564,62 @@ function App() {
   function saveTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingTask?.title.trim()) return;
-    setTasks((current) => current.map((task) => task.id === editingTask.id ? { ...editingTask, title: editingTask.title.trim() } : task));
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === editingTask.id
+          ? { ...editingTask, title: editingTask.title.trim() }
+          : task,
+      ),
+    );
     setEditingTask(null);
   }
-  function addList(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = newListName.trim();
-    if (!name || lists.some((list) => list.name.toLowerCase() === name.toLowerCase())) return;
-    setLists((current) => [...current, { name, tone: "mint" }]);
-    setNewListName("");
+  function saveList(originalName: string | null, list: List) {
+    if (
+      lists.some(
+        (existing) =>
+          existing.name.toLowerCase() === list.name.toLowerCase() &&
+          existing.name !== originalName,
+      )
+    )
+      return;
+    setLists((current) =>
+      originalName
+        ? current.map((existing) =>
+            existing.name === originalName ? list : existing,
+          )
+        : [...current, list],
+    );
+    if (originalName && originalName !== list.name)
+      setTasks((current) =>
+        current.map((task) =>
+          task.category === originalName
+            ? { ...task, category: list.name }
+            : task,
+        ),
+      );
+    if (activeView === originalName) setActiveView(list.name);
   }
   function deleteList(name: string) {
     setLists((current) => current.filter((list) => list.name !== name));
+    setTasks((current) =>
+      current.map((task) =>
+        task.category === name ? { ...task, category: "Inbox" } : task,
+      ),
+    );
     if (activeView === name) setActiveView("Today");
   }
-  const searchResults = searchQuery.trim() ? tasks.filter((task) => `${task.title} ${task.category}`.toLowerCase().includes(searchQuery.toLowerCase())) : [];
+  const searchResults = searchQuery.trim()
+    ? tasks.filter((task) =>
+        `${task.title} ${task.category}`
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()),
+      )
+    : [];
   const notifications = [
     `${remainingCount} tasks still need attention today`,
-    completedCount ? `${completedCount} task${completedCount === 1 ? "" : "s"} completed` : "No tasks completed yet",
+    completedCount
+      ? `${completedCount} task${completedCount === 1 ? "" : "s"} completed`
+      : "No tasks completed yet",
   ];
 
   if (activeView === "Calendar")
@@ -441,7 +678,11 @@ function App() {
           </nav>
           <p className="nav-label list-heading">
             Lists{" "}
-            <button className="tiny-button" aria-label="Manage lists" onClick={() => setListManagerOpen(true)}>
+            <button
+              className="tiny-button"
+              aria-label="Manage lists"
+              onClick={() => setListManagerOpen(true)}
+            >
               +
             </button>
           </p>
@@ -452,9 +693,17 @@ function App() {
                 key={category.name}
                 onClick={() => setActiveView(category.name)}
               >
-                <span className={`list-dot ${category.tone}`}></span>
+                <span
+                  className={`list-dot ${category.tone}`}
+                  style={{ background: category.color }}
+                ></span>
                 {category.name}
-                <span className="nav-count">{tasks.filter((task) => task.category === category.name).length}</span>
+                <span className="nav-count">
+                  {
+                    tasks.filter((task) => task.category === category.name)
+                      .length
+                  }
+                </span>
               </button>
             ))}
           </nav>
@@ -497,10 +746,18 @@ function App() {
             Workspace <span>/</span> {activeView}
           </div>
           <div className="top-actions">
-            <button className="icon-button" aria-label="Search" onClick={() => setSearchOpen(true)}>
+            <button
+              className="icon-button"
+              aria-label="Search"
+              onClick={() => setSearchOpen(true)}
+            >
               ⌕
             </button>
-            <button className="icon-button" aria-label="Notifications" onClick={() => setNotificationsOpen((open) => !open)}>
+            <button
+              className="icon-button"
+              aria-label="Notifications"
+              onClick={() => setNotificationsOpen((open) => !open)}
+            >
               ♢<span className="notification-dot"></span>
             </button>
             <button
@@ -511,7 +768,20 @@ function App() {
             </button>
           </div>
         </header>
-        {notificationsOpen && <div className="popover notification-popover"><div className="popover-heading"><strong>Notifications</strong><button onClick={() => setNotificationsOpen(false)}>×</button></div>{notifications.map((notification) => <p className="notification-item" key={notification}><span className="notification-dot solid"></span>{notification}</p>)}</div>}
+        {notificationsOpen && (
+          <div className="popover notification-popover">
+            <div className="popover-heading">
+              <strong>Notifications</strong>
+              <button onClick={() => setNotificationsOpen(false)}>×</button>
+            </div>
+            {notifications.map((notification) => (
+              <p className="notification-item" key={notification}>
+                <span className="notification-dot solid"></span>
+                {notification}
+              </p>
+            ))}
+          </div>
+        )}
         <div className="content-wrap">
           <section className="welcome-row">
             <div>
@@ -666,6 +936,10 @@ function App() {
                     <div className="task-meta">
                       <span
                         className={`category-pill ${task.category.toLowerCase()}`}
+                        style={{
+                          color: listByName(task.category)?.color,
+                          borderColor: listByName(task.category)?.color,
+                        }}
                       >
                         {task.category}
                       </span>
@@ -699,7 +973,12 @@ function App() {
                 <p className="eyebrow">Organise your life</p>
                 <h2>Your lists</h2>
               </div>
-              <button className="quiet-button">Manage lists ↗</button>
+              <button
+                className="quiet-button"
+                onClick={() => setListManagerOpen(true)}
+              >
+                Manage lists ↗
+              </button>
             </div>
             <div className="category-grid">
               {lists.map((category) => (
@@ -708,7 +987,13 @@ function App() {
                   key={category.name}
                   onClick={() => setActiveView(category.name)}
                 >
-                  <span className={`category-icon ${category.tone}`}>
+                  <span
+                    className={`category-icon ${category.tone}`}
+                    style={{
+                      color: category.color,
+                      borderColor: category.color,
+                    }}
+                  >
                     {category.name === "Home"
                       ? "⌂"
                       : category.name === "Studies"
@@ -719,7 +1004,13 @@ function App() {
                   </span>
                   <span>
                     <strong>{category.name}</strong>
-                    <small>{tasks.filter((task) => task.category === category.name).length} tasks</small>
+                    <small>
+                      {
+                        tasks.filter((task) => task.category === category.name)
+                          .length
+                      }{" "}
+                      tasks
+                    </small>
                   </span>
                   <span className="arrow">↗</span>
                 </button>
@@ -728,10 +1019,193 @@ function App() {
           </section>
         </div>
       </main>
-      {searchOpen && <div className="modal-backdrop" onClick={() => setSearchOpen(false)}><section className="modal search-modal" onClick={(event) => event.stopPropagation()}><div className="popover-heading"><strong>Search GreenFrame</strong><button onClick={() => setSearchOpen(false)}>×</button></div><input autoFocus className="modal-input" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search tasks and lists..." />{searchResults.map((task) => <button className="search-result" key={task.id} onClick={() => { setSearchOpen(false); setActiveView(task.category); }}><strong>{task.title}</strong><small>{task.category} · {task.completed ? "Completed" : "Open"}</small></button>)}{searchQuery && !searchResults.length && <p className="empty-state">No matching tasks.</p>}</section></div>}
-      {editingTask && <div className="modal-backdrop" onClick={() => setEditingTask(null)}><form className="modal task-modal" onSubmit={saveTask} onClick={(event) => event.stopPropagation()}><div className="popover-heading"><strong>Edit task</strong><button type="button" onClick={() => setEditingTask(null)}>×</button></div><label>Task name<input className="modal-input" value={editingTask.title} onChange={(event) => setEditingTask({ ...editingTask, title: event.target.value })} /></label><label>List<select className="modal-input" value={editingTask.category} onChange={(event) => setEditingTask({ ...editingTask, category: event.target.value })}>{lists.map((list) => <option key={list.name}>{list.name}</option>)}<option>Inbox</option></select></label><label>Due date<input className="modal-input" type="date" value={editingTask.dueDate ?? todayKey} onChange={(event) => setEditingTask({ ...editingTask, dueDate: event.target.value })} /></label><label>Time<input className="modal-input" value={editingTask.time ?? ""} onChange={(event) => setEditingTask({ ...editingTask, time: event.target.value })} placeholder="Optional" /></label><div className="modal-actions"><button type="button" className="danger-button" onClick={() => { removeTask(editingTask.id); setEditingTask(null); }}>Delete</button><button className="add-button" type="submit">Save task</button></div></form></div>}
-      {listManagerOpen && <div className="modal-backdrop" onClick={() => setListManagerOpen(false)}><section className="modal task-modal" onClick={(event) => event.stopPropagation()}><div className="popover-heading"><strong>Manage lists</strong><button onClick={() => setListManagerOpen(false)}>×</button></div><form className="quick-add" onSubmit={addList}><input value={newListName} onChange={(event) => setNewListName(event.target.value)} placeholder="New list name" /><button type="submit">Add list</button></form><div className="managed-list">{lists.map((list) => <div key={list.name}><span className={`list-dot ${list.tone}`}></span>{list.name}<button aria-label={`Delete ${list.name}`} onClick={() => deleteList(list.name)}>×</button></div>)}</div></section></div>}
-      {profileOpen && <div className="modal-backdrop" onClick={() => setProfileOpen(false)}><form className="modal task-modal" onSubmit={(event) => { event.preventDefault(); setProfileOpen(false); }} onClick={(event) => event.stopPropagation()}><div className="popover-heading"><strong>Profile & account</strong><button type="button" onClick={() => setProfileOpen(false)}>×</button></div><div className="profile-large"><span className="avatar">{profile.name.charAt(0).toUpperCase()}</span><div><strong>{profile.name}</strong><small>Local profile · account sync ready</small></div></div><label>Your name<input className="modal-input" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Email address<input className="modal-input" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} placeholder="Add an email when accounts are enabled" /></label><p className="account-note">Account registration and cross-device sync need a backend service. This profile is saved locally for now.</p><button className="add-button" type="submit">Save profile</button></form></div>}
+      {searchOpen && (
+        <div className="modal-backdrop" onClick={() => setSearchOpen(false)}>
+          <section
+            className="modal search-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="popover-heading">
+              <strong>Search GreenFrame</strong>
+              <button onClick={() => setSearchOpen(false)}>×</button>
+            </div>
+            <input
+              autoFocus
+              className="modal-input"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search tasks and lists..."
+            />
+            {searchResults.map((task) => (
+              <button
+                className="search-result"
+                key={task.id}
+                onClick={() => {
+                  setSearchOpen(false);
+                  setActiveView(task.category);
+                }}
+              >
+                <strong>{task.title}</strong>
+                <small>
+                  {task.category} · {task.completed ? "Completed" : "Open"}
+                </small>
+              </button>
+            ))}
+            {searchQuery && !searchResults.length && (
+              <p className="empty-state">No matching tasks.</p>
+            )}
+          </section>
+        </div>
+      )}
+      {editingTask && (
+        <div className="modal-backdrop" onClick={() => setEditingTask(null)}>
+          <form
+            className="modal task-modal"
+            onSubmit={saveTask}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="popover-heading">
+              <strong>Edit task</strong>
+              <button type="button" onClick={() => setEditingTask(null)}>
+                ×
+              </button>
+            </div>
+            <label>
+              Task name
+              <input
+                className="modal-input"
+                value={editingTask.title}
+                onChange={(event) =>
+                  setEditingTask({ ...editingTask, title: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              List
+              <select
+                className="modal-input"
+                value={editingTask.category}
+                onChange={(event) =>
+                  setEditingTask({
+                    ...editingTask,
+                    category: event.target.value,
+                  })
+                }
+              >
+                {lists.map((list) => (
+                  <option key={list.name}>{list.name}</option>
+                ))}
+                <option>Inbox</option>
+              </select>
+            </label>
+            <label>
+              Due date
+              <input
+                className="modal-input"
+                type="date"
+                value={editingTask.dueDate ?? todayKey}
+                onChange={(event) =>
+                  setEditingTask({
+                    ...editingTask,
+                    dueDate: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Time
+              <input
+                className="modal-input"
+                value={editingTask.time ?? ""}
+                onChange={(event) =>
+                  setEditingTask({ ...editingTask, time: event.target.value })
+                }
+                placeholder="Optional"
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() => {
+                  removeTask(editingTask.id);
+                  setEditingTask(null);
+                }}
+              >
+                Delete
+              </button>
+              <button className="add-button" type="submit">
+                Save task
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {listManagerOpen && (
+        <ListManager
+          lists={lists}
+          onSave={saveList}
+          onDelete={deleteList}
+          onClose={() => setListManagerOpen(false)}
+        />
+      )}
+      {profileOpen && (
+        <div className="modal-backdrop" onClick={() => setProfileOpen(false)}>
+          <form
+            className="modal task-modal"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setProfileOpen(false);
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="popover-heading">
+              <strong>Profile & account</strong>
+              <button type="button" onClick={() => setProfileOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className="profile-large">
+              <span className="avatar">
+                {profile.name.charAt(0).toUpperCase()}
+              </span>
+              <div>
+                <strong>{profile.name}</strong>
+                <small>Local profile · account sync ready</small>
+              </div>
+            </div>
+            <label>
+              Your name
+              <input
+                className="modal-input"
+                value={profile.name}
+                onChange={(event) =>
+                  setProfile({ ...profile, name: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Email address
+              <input
+                className="modal-input"
+                type="email"
+                value={profile.email}
+                onChange={(event) =>
+                  setProfile({ ...profile, email: event.target.value })
+                }
+                placeholder="Add an email when accounts are enabled"
+              />
+            </label>
+            <p className="account-note">
+              Account registration and cross-device sync need a backend service.
+              This profile is saved locally for now.
+            </p>
+            <button className="add-button" type="submit">
+              Save profile
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

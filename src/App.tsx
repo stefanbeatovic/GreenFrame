@@ -802,7 +802,7 @@ function App() {
                 })}
               </strong>
               <span>
-                Week {getWeekNumber(now)} · {now.getFullYear()}
+                {formatDate(now)} · Week {getWeekNumber(now)} · {now.getFullYear()}
               </span>
             </div>
           </section>

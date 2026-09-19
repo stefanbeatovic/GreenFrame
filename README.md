@@ -1,5 +1,20 @@
 # React + TypeScript + Vite
 
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+## GitHub Pages
+
+Every push to `main` builds the Vite app and deploys `dist` through the workflow in `.github/workflows/deploy.yml`.
+
+In the GitHub repository, open **Settings > Pages** and set **Source** to **GitHub Actions**. After the workflow finishes, the site will be available at:
+
+`https://stefanbeatovic.github.io/GreenFrame/`
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import "./App.css";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 type Task = {
   id: number;
@@ -91,6 +93,114 @@ function getGreeting(hour: number) {
     : hour < 18
       ? "Good afternoon"
       : "Good evening";
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+    const result =
+      mode === "login"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { name } },
+          });
+    if (result.error) setError(result.error.message);
+    else if (mode === "register" && !result.data.session)
+      setMessage(
+        "Account created. Check your email to confirm your account, then log in.",
+      );
+    setSubmitting(false);
+  }
+
+  return (
+    <main className="auth-page">
+      <div className="auth-card">
+        <div className="brand auth-brand">
+          <span className="brand-mark">F</span>
+          <span>GreenFrame</span>
+        </div>
+        <p className="eyebrow">Your personal workspace</p>
+        <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
+        <p className="auth-subtitle">
+          {mode === "login"
+            ? "Sign in to continue to your tasks and plans."
+            : "Save your workspace and access it across devices."}
+        </p>
+        <form onSubmit={submit} className="auth-form">
+          {mode === "register" && (
+            <label>
+              Name
+              <input
+                className="modal-input"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+                required
+              />
+            </label>
+          )}
+          <label>
+            Email
+            <input
+              className="modal-input"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              className="modal-input"
+              type="password"
+              minLength={6}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 6 characters"
+              required
+            />
+          </label>
+          {error && <p className="auth-error">{error}</p>}
+          {message && <p className="auth-message">{message}</p>}
+          <button className="add-button auth-submit" disabled={submitting}>
+            {submitting
+              ? "Please wait..."
+              : mode === "login"
+                ? "Sign in"
+                : "Create account"}
+          </button>
+        </form>
+        <button
+          className="auth-switch"
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setError("");
+            setMessage("");
+          }}
+        >
+          {mode === "login"
+            ? "Need an account? Register"
+            : "Already have an account? Sign in"}
+        </button>
+      </div>
+    </main>
+  );
 }
 
 function CalendarView({
@@ -457,10 +567,23 @@ function ListManager({
 
 function App() {
   const [now, setNow] = useState(new Date());
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [newTask, setNewTask] = useState("");
   const [activeView, setActiveView] = useState("Today");
   const [showCompleted] = useState(true);
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => setSession(nextSession),
+    );
+    return () => listener.subscription.unsubscribe();
+  }, []);
   const [lists, setLists] = useState<List[]>(() => {
     try {
       const saved = JSON.parse(
@@ -621,6 +744,14 @@ function App() {
       ? `${completedCount} task${completedCount === 1 ? "" : "s"} completed`
       : "No tasks completed yet",
   ];
+
+  if (!authReady)
+    return (
+      <main className="auth-page">
+        <p className="auth-subtitle">Loading GreenFrame...</p>
+      </main>
+    );
+  if (isSupabaseConfigured && !session) return <AuthScreen />;
 
   if (activeView === "Calendar")
     return (
@@ -802,7 +933,8 @@ function App() {
                 })}
               </strong>
               <span>
-                {formatDate(now)} · Week {getWeekNumber(now)} · {now.getFullYear()}
+                {formatDate(now)} · Week {getWeekNumber(now)} ·{" "}
+                {now.getFullYear()}
               </span>
             </div>
           </section>
@@ -1200,9 +1332,18 @@ function App() {
               Account registration and cross-device sync need a backend service.
               This profile is saved locally for now.
             </p>
-            <button className="add-button" type="submit">
-              Save profile
-            </button>
+            <div className="modal-actions">
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => supabase?.auth.signOut()}
+              >
+                Sign out
+              </button>
+              <button className="add-button" type="submit">
+                Save profile
+              </button>
+            </div>
           </form>
         </div>
       )}

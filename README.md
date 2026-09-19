@@ -1,4 +1,6 @@
-### GitHub preview URL: https://stefanbeatovic.github.io/GreenFrame/
+# GreenFrame
+
+GitHub preview URL: https://stefanbeatovic.github.io/GreenFrame/
 
 # React + TypeScript + Vite
 

@@ -91,3 +91,19 @@ git push
 ```
 
 The live site is published at [stefanbeatovic.github.io/GreenFrame](https://stefanbeatovic.github.io/GreenFrame/).
+
+## Supabase setup
+
+GreenFrame includes a Supabase client foundation and database schema for future account-based synchronization.
+
+1. Keep your local credentials in `.env.local`:
+
+	```env
+	VITE_SUPABASE_URL=https://your-project-id.supabase.co
+	VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
+	```
+
+2. In Supabase, open **SQL Editor**, create a new query, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and run it.
+3. Do not commit `.env.local` or use a Supabase secret/service-role key in the frontend.
+
+The schema creates profiles, lists, and tasks with row-level security so each account can access only its own data. Authentication and the migration from local browser storage will be connected in the next integration step.

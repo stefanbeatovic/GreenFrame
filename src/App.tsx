@@ -4,6 +4,15 @@ import './App.css'
 type Task = { id: number; title: string; category: string; time?: string; dueDate?: string; priority?: 'high'; completed: boolean }
 function getDateKey(date: Date) { return date.toISOString().slice(0, 10) }
 function getTaskDate(task: Task, fallback: string) { return task.dueDate ?? fallback }
+function loadTasks() {
+  try {
+    const saved = localStorage.getItem('frame-tasks')
+    return saved ? JSON.parse(saved) as Task[] : initialTasks
+  } catch {
+    localStorage.removeItem('frame-tasks')
+    return initialTasks
+  }
+}
 const initialTasks: Task[] = [
   { id: 1, title: 'Finish data literacy assignment', category: 'Studies', time: '10:00', priority: 'high', completed: false },
   { id: 2, title: 'Pick up groceries', category: 'Shopping', time: '17:00', completed: false },
@@ -30,7 +39,7 @@ function CalendarView({ tasks, currentDate, onToggle }: { tasks: Task[]; current
 
 function App() {
   const [now, setNow] = useState(new Date())
-  const [tasks, setTasks] = useState<Task[]>(() => { const saved = localStorage.getItem('frame-tasks'); return saved ? JSON.parse(saved) : initialTasks })
+  const [tasks, setTasks] = useState<Task[]>(loadTasks)
   const [newTask, setNewTask] = useState('')
   const [activeView, setActiveView] = useState('Today')
   const [showCompleted] = useState(true)
